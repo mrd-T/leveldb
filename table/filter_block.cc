@@ -18,20 +18,31 @@ static const size_t kFilterBase = 1 << kFilterBaseLg;
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {}
 
+    /*
+    计算当前数据块对应的过滤器索引 filter_index。
+如果 filter_index 大于当前已生成的过滤器数量，则调用 GenerateFilter 生成新的过滤器。*/
 void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
   uint64_t filter_index = (block_offset / kFilterBase);
   assert(filter_index >= filter_offsets_.size());
-  while (filter_index > filter_offsets_.size()) {
+  while (filter_index > filter_offsets_.size()) {//
     GenerateFilter();
   }
 }
-
+/*
+将键的起始位置（keys_.size()）添加到 start_ 中。
+将键的数据追加到 keys_ 中。
+*/
 void FilterBlockBuilder::AddKey(const Slice& key) {
   Slice k = key;
   start_.push_back(keys_.size());
   keys_.append(k.data(), k.size());
 }
-
+/*
+如果还有未处理的键，则调用 GenerateFilter 生成最后一个过滤器。
+将每个过滤器的偏移量追加到 result_ 中。
+将偏移量数组的起始位置和编码参数 kFilterBaseLg 追加到 result_ 中。
+返回生成的过滤器块数据。
+*/
 Slice FilterBlockBuilder::Finish() {
   if (!start_.empty()) {
     GenerateFilter();
@@ -47,7 +58,15 @@ Slice FilterBlockBuilder::Finish() {
   result_.push_back(kFilterBaseLg);  // Save encoding parameter in result
   return Slice(result_);
 }
-
+/*
+生成过滤器，并将其追加到 result_ 中。
+​逻辑：
+如果没有键，则直接记录当前过滤器的偏移量。
+否则：
+将 keys_ 中的键数据解析为 tmp_keys_。
+调用 policy_->CreateFilter 生成过滤器，并将其追加到 result_ 中。
+清空 tmp_keys_、keys_ 和 start_
+*/
 void FilterBlockBuilder::GenerateFilter() {
   const size_t num_keys = start_.size();
   if (num_keys == 0) {
@@ -73,7 +92,7 @@ void FilterBlockBuilder::GenerateFilter() {
   keys_.clear();
   start_.clear();
 }
-
+//读取
 FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
                                      const Slice& contents)
     : policy_(policy), data_(nullptr), offset_(nullptr), num_(0), base_lg_(0) {
@@ -86,7 +105,7 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   offset_ = data_ + last_word;
   num_ = (n - 5 - last_word) / 4;
 }
-
+//找到地址并且看在不在
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
   uint64_t index = block_offset >> base_lg_;
   if (index < num_) {

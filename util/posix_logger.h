@@ -8,13 +8,12 @@
 #ifndef STORAGE_LEVELDB_UTIL_POSIX_LOGGER_H_
 #define STORAGE_LEVELDB_UTIL_POSIX_LOGGER_H_
 
-#include <sys/time.h>
-
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
 #include <sstream>
+#include <sys/time.h>
 #include <thread>
 
 #include "leveldb/env.h"
@@ -30,6 +29,7 @@ class PosixLogger final : public Logger {
 
   ~PosixLogger() override { std::fclose(fp_); }
 
+  // 格式化字符串和可变参数
   void Logv(const char* format, std::va_list arguments) override {
     // Record the time as close to the Logv() call as possible.
     struct ::timeval now_timeval;
@@ -46,9 +46,9 @@ class PosixLogger final : public Logger {
     if (thread_id.size() > kMaxThreadIdSize) {
       thread_id.resize(kMaxThreadIdSize);
     }
-
-    // We first attempt to print into a stack-allocated buffer. If this attempt
-    // fails, we make a second attempt with a dynamically allocated buffer.
+    // 双缓冲
+    //  We first attempt to print into a stack-allocated buffer. If this attempt
+    //  fails, we make a second attempt with a dynamically allocated buffer.
     constexpr const int kStackBufferSize = 512;
     char stack_buffer[kStackBufferSize];
     static_assert(sizeof(stack_buffer) == static_cast<size_t>(kStackBufferSize),
@@ -111,6 +111,7 @@ class PosixLogger final : public Logger {
       }
 
       assert(buffer_offset <= buffer_size);
+      // 立刻刷盘
       std::fwrite(buffer, 1, buffer_offset, fp_);
       std::fflush(fp_);
 

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "leveldb/slice.h"
+
 #include "util/hash.h"
 
 namespace leveldb {
@@ -42,11 +43,15 @@ class FilterBlockBuilder {
   void GenerateFilter();
 
   const FilterPolicy* policy_;
-  std::string keys_;             // Flattened key contents
-  std::vector<size_t> start_;    // Starting index in keys_ of each key
-  std::string result_;           // Filter data computed so far
+  std::string keys_;           // Flattened key contents //扁平化
+  std::vector<size_t> start_;  // Starting index in keys_ of each key
+                               // //每个key在keys_中的起始索引
+  std::string
+      result_;  // Filter data computed so far //到目前为止计算的过滤器数据
   std::vector<Slice> tmp_keys_;  // policy_->CreateFilter() argument
-  std::vector<uint32_t> filter_offsets_;
+                                 // //policy_->CreateFilter()的参数
+  std::vector<uint32_t>
+      filter_offsets_;  // Filter data offsets //过滤器数据偏移量
 };
 
 class FilterBlockReader {
@@ -57,10 +62,11 @@ class FilterBlockReader {
 
  private:
   const FilterPolicy* policy_;
-  const char* data_;    // Pointer to filter data (at block-start)
+  const char* data_;  // Pointer to filter data (at block-start) //过滤器地址
   const char* offset_;  // Pointer to beginning of offset array (at block-end)
-  size_t num_;          // Number of entries in offset array
-  size_t base_lg_;      // Encoding parameter (see kFilterBaseLg in .cc file)
+                        // //偏移量数组地址
+  size_t num_;      // Number of entries in offset array //多少个过滤器
+  size_t base_lg_;  // Encoding parameter (see kFilterBaseLg in .cc file) //大小
 };
 
 }  // namespace leveldb

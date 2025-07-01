@@ -6,13 +6,14 @@
 
 #include "leveldb/env.h"
 #include "leveldb/options.h"
+
 #include "port/port.h"
 #include "table/block.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
 
 namespace leveldb {
-
+// 将 BlockHandle 编码为二进制格式，并追加到 dst 中
 void BlockHandle::EncodeTo(std::string* dst) const {
   // Sanity check that all fields have been set
   assert(offset_ != ~static_cast<uint64_t>(0));
@@ -20,7 +21,7 @@ void BlockHandle::EncodeTo(std::string* dst) const {
   PutVarint64(dst, offset_);
   PutVarint64(dst, size_);
 }
-
+// 从二进制数据中解码出一个 BlockHandle
 Status BlockHandle::DecodeFrom(Slice* input) {
   if (GetVarint64(input, &offset_) && GetVarint64(input, &size_)) {
     return Status::OK();
@@ -28,7 +29,7 @@ Status BlockHandle::DecodeFrom(Slice* input) {
     return Status::Corruption("bad block handle");
   }
 }
-
+// 将 Footer 编码为二进制格式，并追加到 dst 中
 void Footer::EncodeTo(std::string* dst) const {
   const size_t original_size = dst->size();
   metaindex_handle_.EncodeTo(dst);
@@ -40,6 +41,7 @@ void Footer::EncodeTo(std::string* dst) const {
   (void)original_size;  // Disable unused variable warning.
 }
 
+// 从 input 中解码 Foote
 Status Footer::DecodeFrom(Slice* input) {
   if (input->size() < kEncodedLength) {
     return Status::Corruption("not an sstable (footer too short)");
@@ -65,7 +67,7 @@ Status Footer::DecodeFrom(Slice* input) {
   }
   return result;
 }
-
+// 从文件中读取一个数据块（Block）的函数 ReadBlock 的实现
 Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result) {
   result->data = Slice();

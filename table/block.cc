@@ -11,10 +11,11 @@
 #include <vector>
 
 #include "leveldb/comparator.h"
+
 #include "table/format.h"
 #include "util/coding.h"
 #include "util/logging.h"
-
+// 读取一个block
 namespace leveldb {
 
 inline uint32_t Block::NumRestarts() const {

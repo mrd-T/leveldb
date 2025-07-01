@@ -20,6 +20,7 @@ struct ReadOptions;
 
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
+//获取文件的一个Block的偏移量和大小 指针
 class BlockHandle {
  public:
   // Maximum encoding length of a BlockHandle
@@ -66,8 +67,8 @@ class Footer {
   Status DecodeFrom(Slice* input);
 
  private:
-  BlockHandle metaindex_handle_;
-  BlockHandle index_handle_;
+  BlockHandle metaindex_handle_; //Meta Index Block存储了指向Filter Block的指针
+  BlockHandle index_handle_; //Index Block存储了指向Data Block的指针
 };
 
 // kTableMagicNumber was picked by running
@@ -78,10 +79,10 @@ static const uint64_t kTableMagicNumber = 0xdb4775248b80fb57ull;
 // 1-byte type + 32-bit crc
 static const size_t kBlockTrailerSize = 5;
 
-struct BlockContents {
+struct BlockContents {  //数据部分
   Slice data;           // Actual contents of data
-  bool cachable;        // True iff data can be cached
-  bool heap_allocated;  // True iff caller should delete[] data.data()
+  bool cachable;        // True iff data can be cached //是否缓存
+  bool heap_allocated;  // True iff caller should delete[] data.data()//是否堆分配
 };
 
 // Read the block identified by "handle" from "file".  On failure

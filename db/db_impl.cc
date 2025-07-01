@@ -4,14 +4,6 @@
 
 #include "db/db_impl.h"
 
-#include <algorithm>
-#include <atomic>
-#include <cstdint>
-#include <cstdio>
-#include <set>
-#include <string>
-#include <vector>
-
 #include "db/builder.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
@@ -22,11 +14,20 @@
 #include "db/table_cache.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <set>
+#include <string>
+#include <vector>
+
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/status.h"
 #include "leveldb/table.h"
 #include "leveldb/table_builder.h"
+
 #include "port/port.h"
 #include "table/block.h"
 #include "table/merger.h"
@@ -501,7 +502,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
 
   return status;
 }
-
+// 写入level0
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();
@@ -545,7 +546,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   stats_[level].Add(stats);
   return s;
 }
-
+// memtable到immemtable
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
@@ -713,7 +714,7 @@ void DBImpl::BackgroundCompaction() {
   }
 
   Compaction* c;
-  bool is_manual = (manual_compaction_ != nullptr);
+  bool is_manual = (manual_compaction_ != nullptr);  // 判断是否是用户压缩
   InternalKey manual_end;
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
@@ -801,7 +802,14 @@ void DBImpl::CleanupCompaction(CompactionState* compact) {
   }
   delete compact;
 }
-
+/*
+​分配文件编号：从 VersionSet 中分配一个新的文件编号。
+​标记文件为待处理：将文件编号添加到 pending_outputs_
+集合中，表示该文件正在被写入。
+​创建输出文件：在磁盘上创建一个新的 SSTable 文件。
+​初始化 TableBuilder：创建一个 TableBuilder
+对象，用于将压缩后的数据写入文件。
+*/
 Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   assert(compact != nullptr);
   assert(compact->builder == nullptr);
@@ -893,7 +901,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   }
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
-
+// 合并
 Status DBImpl::DoCompactionWork(CompactionState* compact) {
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
@@ -1029,7 +1037,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
   delete input;
   input = nullptr;
-
+  // 统计信息收集、状态更新和收尾工作
   CompactionStats stats;
   stats.micros = env_->NowMicros() - start_micros - imm_micros;
   for (int which = 0; which < 2; which++) {

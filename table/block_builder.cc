@@ -25,7 +25,7 @@
 //     restarts: uint32[num_restarts]
 //     num_restarts: uint32
 // restarts[i] contains the offset within the block of the ith restart point.
-
+// 构建一个block
 #include "table/block_builder.h"
 
 #include <algorithm>
@@ -33,6 +33,7 @@
 
 #include "leveldb/comparator.h"
 #include "leveldb/options.h"
+
 #include "util/coding.h"
 
 namespace leveldb {
@@ -43,7 +44,7 @@ BlockBuilder::BlockBuilder(const Options* options)
   restarts_.push_back(0);  // First restart point is at offset 0
 }
 
-void BlockBuilder::Reset() {
+void BlockBuilder::Reset() {  // 重置
   buffer_.clear();
   restarts_.clear();
   restarts_.push_back(0);  // First restart point is at offset 0
@@ -58,7 +59,7 @@ size_t BlockBuilder::CurrentSizeEstimate() const {
           sizeof(uint32_t));                     // Restart array length
 }
 
-Slice BlockBuilder::Finish() {
+Slice BlockBuilder::Finish() {  // 把restart_数组写入到buffer_中，并返回buffer_
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {
     PutFixed32(&buffer_, restarts_[i]);
@@ -68,6 +69,10 @@ Slice BlockBuilder::Finish() {
   return Slice(buffer_);
 }
 
+/*
+添加元素在block中，key是要添加的key，value是要添加的value,restart_interval是重启的间隔,即每隔多少个key就会有一个重启点
+restart_interval=16,则每16个key就会有一个重启点
+*/
 void BlockBuilder::Add(const Slice& key, const Slice& value) {
   Slice last_key_piece(last_key_);
   assert(!finished_);
@@ -75,20 +80,22 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   assert(buffer_.empty()  // No values yet?
          || options_->comparator->Compare(key, last_key_piece) > 0);
   size_t shared = 0;
-  if (counter_ < options_->block_restart_interval) {
+  if (counter_ < options_->block_restart_interval) {  // 小于16，说明不是重启点
     // See how much sharing to do with previous string
     const size_t min_length = std::min(last_key_piece.size(), key.size());
     while ((shared < min_length) && (last_key_piece[shared] == key[shared])) {
       shared++;
     }
-  } else {
+  } else {  // 重启点，重置重启点，重置计数器
     // Restart compression
     restarts_.push_back(buffer_.size());
     counter_ = 0;
   }
   const size_t non_shared = key.size() - shared;
 
-  // Add "<shared><non_shared><value_size>" to buffer_
+  // Add "<shared><non_shared><value_size>" to
+  // buffer_//添加"<shared><non_shared><value_size>"到buffer_
+  // 和前面的key一样的部分，不一样的部分，value的大小
   PutVarint32(&buffer_, shared);
   PutVarint32(&buffer_, non_shared);
   PutVarint32(&buffer_, value.size());

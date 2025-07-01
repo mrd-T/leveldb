@@ -10,6 +10,7 @@
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/options.h"
+
 #include "table/block_builder.h"
 #include "table/filter_block.h"
 #include "table/format.h"
@@ -17,7 +18,7 @@
 #include "util/crc32c.h"
 
 namespace leveldb {
-
+// 用于管理 SSTable 文件的构建过程
 struct TableBuilder::Rep {
   Rep(const Options& opt, WritableFile* f)
       : options(opt),
@@ -39,13 +40,13 @@ struct TableBuilder::Rep {
   Options index_block_options;
   WritableFile* file;
   uint64_t offset;
-  Status status;
-  BlockBuilder data_block;
-  BlockBuilder index_block;
+  Status status;             // 状态
+  BlockBuilder data_block;   // 数据块
+  BlockBuilder index_block;  // 索引块
   std::string last_key;
   int64_t num_entries;
   bool closed;  // Either Finish() or Abandon() has been called.
-  FilterBlockBuilder* filter_block;
+  FilterBlockBuilder* filter_block;  // 过滤块
 
   // We do not emit the index entry for a block until we have seen the
   // first key for the next data block.  This allows us to use shorter
@@ -56,26 +57,27 @@ struct TableBuilder::Rep {
   // blocks.
   //
   // Invariant: r->pending_index_entry is true only if data_block is empty.
-  bool pending_index_entry;
+  bool pending_index_entry;    // ​延迟生成索引条目
   BlockHandle pending_handle;  // Handle to add to index block
 
   std::string compressed_output;
 };
 
-TableBuilder::TableBuilder(const Options& options, WritableFile* file)
+TableBuilder::TableBuilder(const Options& options,
+                           WritableFile* file)  // 初始化
     : rep_(new Rep(options, file)) {
   if (rep_->filter_block != nullptr) {
     rep_->filter_block->StartBlock(0);
   }
 }
 
-TableBuilder::~TableBuilder() {
+TableBuilder::~TableBuilder() {  // 析构
   assert(rep_->closed);  // Catch errors where caller forgot to call Finish()
   delete rep_->filter_block;
   delete rep_;
 }
 
-Status TableBuilder::ChangeOptions(const Options& options) {
+Status TableBuilder::ChangeOptions(const Options& options) {  // 改变选择
   // Note: if more fields are added to Options, update
   // this function to catch changes that should not be allowed to
   // change in the middle of building a Table.
@@ -90,38 +92,40 @@ Status TableBuilder::ChangeOptions(const Options& options) {
   rep_->index_block_options.block_restart_interval = 1;
   return Status::OK();
 }
-
+// 向TableBuilder中添加一个键值对
 void TableBuilder::Add(const Slice& key, const Slice& value) {
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
   if (r->num_entries > 0) {
-    assert(r->options.comparator->Compare(key, Slice(r->last_key)) > 0);
+    assert(r->options.comparator->Compare(key, Slice(r->last_key)) >
+           0);  // 保证顺序执行
   }
 
   if (r->pending_index_entry) {
     assert(r->data_block.empty());
-    r->options.comparator->FindShortestSeparator(&r->last_key, key);
+    r->options.comparator->FindShortestSeparator(&r->last_key,
+                                                 key);  // 找到最短的分隔符
     std::string handle_encoding;
     r->pending_handle.EncodeTo(&handle_encoding);
-    r->index_block.Add(r->last_key, Slice(handle_encoding));
+    r->index_block.Add(r->last_key, Slice(handle_encoding));  // 索引插入
     r->pending_index_entry = false;
   }
 
-  if (r->filter_block != nullptr) {
+  if (r->filter_block != nullptr) {  // 过滤器插入
     r->filter_block->AddKey(key);
   }
 
   r->last_key.assign(key.data(), key.size());
   r->num_entries++;
-  r->data_block.Add(key, value);
+  r->data_block.Add(key, value);  // 数据块插入
 
   const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
   if (estimated_block_size >= r->options.block_size) {
     Flush();
   }
 }
-
+// 刷新数据块，写入到文件
 void TableBuilder::Flush() {
   Rep* r = rep_;
   assert(!r->closed);
@@ -138,6 +142,7 @@ void TableBuilder::Flush() {
   }
 }
 
+// 写入
 void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   // File format contains a sequence of blocks where each block has:
   //    block_data: uint8[n]
@@ -149,7 +154,8 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
 
   Slice block_contents;
   CompressionType type = r->options.compression;
-  // TODO(postrelease): Support more compression options: zlib?
+  // 压缩算法
+  //  TODO(postrelease): Support more compression options: zlib?
   switch (type) {
     case kNoCompression:
       block_contents = raw;
@@ -188,7 +194,8 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   r->compressed_output.clear();
   block->Reset();
 }
-
+/*中用于将原始数据块写入文件的函数。它不仅写入数据块的内容，还附加了数据块的类型和
+ * CRC 校验和，并更新数据块的位置信息。*/
 void TableBuilder::WriteRawBlock(const Slice& block_contents,
                                  CompressionType type, BlockHandle* handle) {
   Rep* r = rep_;

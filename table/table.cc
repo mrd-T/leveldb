@@ -9,6 +9,7 @@
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/options.h"
+
 #include "table/block.h"
 #include "table/filter_block.h"
 #include "table/format.h"
@@ -35,6 +36,7 @@ struct Table::Rep {
   Block* index_block;
 };
 
+// 打开一个sstable文件
 Status Table::Open(const Options& options, RandomAccessFile* file,
                    uint64_t size, Table** table) {
   *table = nullptr;
