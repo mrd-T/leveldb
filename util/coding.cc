@@ -69,6 +69,10 @@ void PutVarint64(std::string* dst, uint64_t v) {
   dst->append(buf, ptr - buf);
 }
 
+/*
+先将 Slice 数据的长度编码为 varint32 格式写入目标字符串；
+然后将原始数据内容追加到目标字符串中。
+*/
 void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   PutVarint32(dst, value.size());
   dst->append(value.data(), value.size());

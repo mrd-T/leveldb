@@ -48,6 +48,8 @@ namespace port {
 class CondVar;
 
 // Thinly wraps std::mutex.
+// 注解宏,通过 Clang 的线程安全注解（Thread Safety
+// Annotations），在编译时检测锁的误用
 class LOCKABLE Mutex {
  public:
   Mutex() = default;

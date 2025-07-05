@@ -31,6 +31,87 @@ enum CompressionType {
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
+/*控制数据库行为的参数
+const Comparator* comparator;
+
+用途：定义键（key）之间的排序规则。
+默认值：使用字典序（lexicographic）进行比较。
+注意事项：
+用户必须保证每次打开同一数据库时传入相同的比较器。
+比较器名称及排序逻辑必须一致，否则可能导致数据损坏或不可预料的行为。
+bool create_if_missing = false;
+
+控制是否在数据库不存在时自动创建它。
+若设为 true，则当指定路径下没有数据库时会自动创建一个新数据库。
+bool error_if_exists = false;
+
+如果设为 true，当尝试打开一个已存在的数据库时会返回错误。
+适用于需要确保数据库为空的新建场景。
+bool paranoid_checks = false;
+
+是否启用“激进检查”模式。
+启用后会在读写过程中对数据做更严格的验证，有助于提前发现错误。
+缺点是可能因为某一条记录损坏导致整个数据库无法打开。
+Env* env;
+
+环境对象指针，用于与底层系统交互（如文件读写、线程调度等）。
+默认使用 Env::Default() 提供的标准实现。
+可替换为自定义实现以支持特殊环境（如内存模拟、沙盒等）。
+Logger* info_log = nullptr;
+
+日志记录器指针。
+若非空，则所有日志信息将输出到该对象；若为空，则日志会被写入数据库目录下的日志文件中。
+二、影响性能的参数
+size_t write_buffer_size = 4 * 1024 * 1024;
+
+写缓冲区大小，默认为 4MB。
+数据先写入内存中的写缓冲区，达到阈值后才会落盘。
+更大的值可提升批量写入性能，但会增加内存占用，并延长恢复时间（崩溃后重新打开数据库所需时间）。
+int max_open_files = 1000;
+
+最大同时打开的文件数。
+LevelDB 使用多个 SST 文件存储数据，此参数限制最大打开数量。
+若工作集较大，应适当调高此值以避免频繁打开/关闭文件。
+Cache* block_cache = nullptr;
+
+块缓存指针。
+用于缓存从磁盘读取的数据块，提高读取性能。
+若未设置，LevelDB 将使用内置的 8MB 缓存。
+size_t block_size = 4 * 1024;
+
+每个数据块的大小，默认为 4KB。
+块是 LevelDB 从磁盘读取的基本单位。
+较大的块可以减少 I/O 次数，但可能浪费更多内存空间。
+int block_restart_interval = 16;
+
+在块中每隔多少条记录插入一次完整 key 的重启点。
+用于优化 delta encoding（增量编码），减少存储开销。
+大多数用户无需修改。
+size_t max_file_size = 2 * 1024 * 1024;
+
+每个 SST 文件的最大大小，默认为 2MB。
+较大的值可减少文件数量，但会增加压缩时间和延迟。
+适合初始导入大量数据时调整。
+CompressionType compression = kSnappyCompression;
+
+压缩算法类型，默认使用 Snappy。
+Snappy 是一种快速压缩算法，压缩速度约 200-500MB/s，解压速度约 400-800MB/s。
+即使数据不可压缩，Snappy 也会高效处理并切换为无压缩模式。
+int zstd_compression_level = 1;
+
+Zstandard 压缩算法的压缩级别。
+范围为 [-5, 22]，默认为 1。
+数值越大压缩率越高，但压缩速度越慢。
+bool reuse_logs = false;
+
+实验性功能：是否复用 MANIFEST 和日志文件。
+若启用，可显著加快数据库打开速度。
+当前默认为 false，未来可能改为默认启用。
+const FilterPolicy* filter_policy = nullptr;
+
+过滤策略指针。
+用于构建布隆过滤器（Bloom Filter），减少不必要的磁盘读取。
+推荐使用 NewBloomFilterPolicy() 创建标准布隆过滤器。*/
 struct LEVELDB_EXPORT Options {
   // Create an Options object with default values for all fields.
   Options();

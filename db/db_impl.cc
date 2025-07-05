@@ -92,6 +92,12 @@ static void ClipToRange(T* ptr, V minvalue, V maxvalue) {
   if (static_cast<V>(*ptr) > maxvalue) *ptr = maxvalue;
   if (static_cast<V>(*ptr) < minvalue) *ptr = minvalue;
 }
+/*
+复制原始选项：将输入的 src 选项复制到 result 中。
+强制设置内部比较器和过滤策略：使用传入的 icmp 和 ipolicy。
+限制关键参数范围：如最大打开文件数、写缓冲区大小、文件大小、块大小等。
+日志处理：若未指定日志对象，则在数据库目录下创建新的 info 日志文件。
+默认块缓存：若未指定块缓存，则创建一个默认的 LRU 缓存（8MB）。*/
 Options SanitizeOptions(const std::string& dbname,
                         const InternalKeyComparator* icmp,
                         const InternalFilterPolicy* ipolicy,
@@ -382,10 +388,14 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
 
   return Status::OK();
 }
-
+/*
+函数通过读取日志文件中的写操作记录，并将其重新插入到内存表中，确保数据库在崩溃或重启后能够恢复未持久化的数据。
+它还支持日志文件的复用，以提高性能。整个过程涉及日志读取、错误处理、内存管理以及与磁盘存储的交互，是
+LevelDB 数据恢复机制的重要组成部分。*/
 Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
                               bool* save_manifest, VersionEdit* edit,
                               SequenceNumber* max_sequence) {
+  //
   struct LogReporter : public log::Reader::Reporter {
     Env* env;
     Logger* info_log;
@@ -503,6 +513,22 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   return status;
 }
 // 写入level0
+/*
+该函数 [WriteLevel0Table](file:///home/mrd/leveldb/db/db_impl.h#L131-L131)
+的主要功能是将内存表（MemTable）内容写入一个新的 Level-0 SSTable
+文件，并更新版本信息。
+
+具体逻辑如下：
+
+1. **生成新文件编号**并加入待输出集合；
+2. **创建 MemTable 的迭代器**用于遍历数据；
+3. **释放锁后构建 SSTable 文件**，调用
+[BuildTable](file:///home/mrd/leveldb/db/builder.h#L24-L25) 写入磁盘；
+4. **记录日志和统计信息**，清理迭代器和待输出集合；
+5. **若写入成功，则选择合适的层级**（默认 Level 0），并通过 `edit`
+添加新文件到版本控制中；
+6. **更新压缩统计信息**并返回操作状态。
+*/
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();
@@ -546,7 +572,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   stats_[level].Add(stats);
   return s;
 }
-// memtable到immemtable
+/*
+将不可变的内存表（imm_）压缩并持久化为一个 SSTable 文件，并更新版本控制信息*/
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
@@ -579,7 +606,9 @@ void DBImpl::CompactMemTable() {
     RecordBackgroundError(s);
   }
 }
-
+/*
+是 LevelDB 中用于手动触发指定范围内的 SST
+文件压缩的公共接口，其主要目的是优化数据库中特定键范围的数据分布。下面是详细的逻辑说明：*/
 void DBImpl::CompactRange(const Slice* begin, const Slice* end) {
   int max_level_with_files = 1;
   {
@@ -664,7 +693,10 @@ void DBImpl::RecordBackgroundError(const Status& s) {
     background_work_finished_signal_.SignalAll();
   }
 }
-
+/*
+确保当前持有互斥锁；
+如果已有压缩任务在排队、数据库正在关闭、存在错误、或没有需要压缩的工作，则不安排新任务；
+否则标记压缩任务已排队，并通过线程池调度执行*/
 void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
@@ -686,6 +718,9 @@ void DBImpl::BGWork(void* db) {
   reinterpret_cast<DBImpl*>(db)->BackgroundCall();
 }
 
+/*
+处理数据库后台任务（如压缩）的逻辑
+*/
 void DBImpl::BackgroundCall() {
   MutexLock l(&mutex_);
   assert(background_compaction_scheduled_);
@@ -704,10 +739,10 @@ void DBImpl::BackgroundCall() {
   MaybeScheduleCompaction();
   background_work_finished_signal_.SignalAll();
 }
-
+// 后台压缩
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
-
+  // memtable到immemtable
   if (imm_ != nullptr) {
     CompactMemTable();
     return;
@@ -752,6 +787,7 @@ void DBImpl::BackgroundCompaction() {
         static_cast<unsigned long long>(f->file_size),
         status.ToString().c_str(), versions_->LevelSummary(&tmp));
   } else {
+    // 真彩处理
     CompactionState* compact = new CompactionState(c);
     status = DoCompactionWork(compact);
     if (!status.ok()) {
@@ -785,7 +821,11 @@ void DBImpl::BackgroundCompaction() {
     manual_compaction_ = nullptr;
   }
 }
-
+/*
+如果存在未完成的SSTable构建器（builder），则放弃并删除它；
+删除输出文件对象（outfile）；
+从待处理输出集合中移除所有输出文件编号；
+最后删除传入的CompactionState对象本身。*/
 void DBImpl::CleanupCompaction(CompactionState* compact) {
   mutex_.AssertHeld();
   if (compact->builder != nullptr) {
@@ -902,6 +942,12 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
 // 合并
+/*
+备阶段：记录日志、获取快照信息、创建输入迭代器。
+释放锁并处理压缩：在不持有互斥锁的情况下遍历输入数据，处理每个键值对。
+去重与删除标记清理：根据序列号判断是否保留键值对，清理过时的删除标记。
+写入新文件：将有效数据写入新的 SST 文件，并控制文件大小。
+收尾工作：关闭输出文件、更新版本信息、统计压缩性能数据。*/
 Status DBImpl::DoCompactionWork(CompactionState* compact) {
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
@@ -1086,7 +1132,17 @@ static void CleanupIteratorState(void* arg1, void* arg2) {
 }
 
 }  // anonymous namespace
+/*
+该函数创建一个用于遍历数据库内容的内部迭代器，具体功能如下：
 
+1. 加锁保护多线程访问；
+2. 获取最新的快照序列号；
+3. 构建包含内存（mem_）和只读内存（imm_）的迭代器列表；
+4. 添加当前版本（SST文件）的迭代器；
+5. 创建合并迭代器（NewMergingIterator），统一遍历所有子迭代器；
+6. 注册清理回调，确保资源释放；
+7. 返回最终的内部迭代器。
+ */
 Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
                                       SequenceNumber* latest_snapshot,
                                       uint32_t* seed) {
@@ -1335,6 +1391,13 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
+/*
+如果后台有错误，则返回该错误。
+若L0文件数接近上限且允许延迟，则短暂休眠1毫秒以减缓写入速度。
+如果当前memtable未满且不强制写，则直接返回。
+如果存在只读的imm_（正在压缩），则等待压缩完成。
+若L0文件过多，暂停写入并等待后台压缩完成。
+否则切换到新的memtable，并触发旧memtable的压缩流程。*/
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1507,6 +1570,13 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() = default;
 
+/*
+创建 DBImpl 实例并加锁保护；
+调用 Recover 恢复数据库状态；
+若内存表为空，则新建日志文件和内存表；
+若需保存元信息，更新版本并应用更改；
+清理旧文件，安排压缩任务；
+解锁，若成功则返回数据库实例，否则删除 DBImpl 并返回错误。*/
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 
@@ -1551,7 +1621,14 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
 }
 
 Snapshot::~Snapshot() = default;
-
+/*
+获取数据库目录下的所有文件名；
+忽略目录不存在的错误；
+对数据库加锁，防止其他进程访问；
+遍历并删除除锁文件外的所有文件；
+解锁并删除锁文件；
+删除数据库目录本身；
+返回操作结果状态。*/
 Status DestroyDB(const std::string& dbname, const Options& options) {
   Env* env = options.env;
   std::vector<std::string> filenames;

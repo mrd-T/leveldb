@@ -78,6 +78,7 @@ class DBImpl : public DB {
   struct Writer;
 
   // Information for a manual compaction
+  // 手动压缩信息
   struct ManualCompaction {
     int level;
     bool done;
